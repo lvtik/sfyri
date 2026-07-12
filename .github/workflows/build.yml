@@ -27,7 +27,7 @@ jobs:
             arch: arm64
 
           - name: darwin-x86_64
-            runner: macos-13
+            runner: macos-15-intel
             os: darwin
             arch: x86_64
 
