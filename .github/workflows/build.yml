@@ -1,0 +1,113 @@
+name: Build
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64
+            runner: ubuntu-latest
+            os: linux
+            arch: x86_64
+
+          - name: linux-arm64
+            runner: ubuntu-24.04-arm
+            os: linux
+            arch: arm64
+
+          - name: darwin-x86_64
+            runner: macos-13
+            os: darwin
+            arch: x86_64
+
+          - name: darwin-arm64
+            runner: macos-14
+            os: darwin
+            arch: arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ---- Linux: build raylib from source so it works the same way ----
+      # ---- on both x86_64 and arm64 runners, regardless of what      ----
+      # ---- version happens to be in the distro's package repos.      ----
+      - name: Install build tools and raylib (Linux)
+        if: matrix.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential git cmake pkg-config \
+            libgl1-mesa-dev libx11-dev libxrandr-dev libxi-dev \
+            libxcursor-dev libxinerama-dev libwayland-dev libxkbcommon-dev
+
+          git clone --depth 1 --branch 5.5 https://github.com/raysan5/raylib.git /tmp/raylib
+          cmake -S /tmp/raylib -B /tmp/raylib/build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DBUILD_EXAMPLES=OFF
+          cmake --build /tmp/raylib/build --parallel
+          sudo cmake --install /tmp/raylib/build
+
+      # ---- macOS: Homebrew already provides raylib for both Intel  ----
+      # ---- (macos-13) and Apple Silicon (macos-14) runners.        ----
+      - name: Install raylib (macOS)
+        if: matrix.os == 'darwin'
+        run: brew install raylib
+
+      - name: Build
+        run: make
+
+      - name: Verify architecture
+        run: file bin/sfyri
+
+      # Uses the tag (e.g. "v1.2.0") when building from a tag push,
+      # otherwise falls back to "dev-<short-sha>" for regular commits/PRs.
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=dev-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp bin/sfyri dist/sfyri
+          tar -czf "dist/sfyri-${{ steps.version.outputs.version }}-${{ matrix.name }}.tar.gz" -C dist sfyri
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sfyri-${{ steps.version.outputs.version }}-${{ matrix.name }}
+          path: dist/sfyri-${{ steps.version.outputs.version }}-${{ matrix.name }}.tar.gz
+          if-no-files-found: error
+
+  release:
+    name: Attach binaries to release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create/update release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*.tar.gz
