@@ -70,7 +70,7 @@ jobs:
         run: make
 
       - name: Verify architecture
-        run: file bin/burnx
+        run: file bin/sfyri
 
       # Uses the tag (e.g. "v1.2.0") when building from a tag push,
       # otherwise falls back to "dev-<short-sha>" for regular commits/PRs.
@@ -86,14 +86,14 @@ jobs:
       - name: Package
         run: |
           mkdir -p dist
-          cp bin/burnx dist/burnx
-          tar -czf "dist/burnx-${{ steps.version.outputs.version }}-${{ matrix.name }}.tar.gz" -C dist burnx
+          cp bin/sfyri dist/sfyri
+          tar -czf "dist/sfyri-${{ steps.version.outputs.version }}-${{ matrix.name }}.tar.gz" -C dist sfyri
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: burnx-${{ steps.version.outputs.version }}-${{ matrix.name }}
-          path: dist/burnx-${{ steps.version.outputs.version }}-${{ matrix.name }}.tar.gz
+          name: sfyri-${{ steps.version.outputs.version }}-${{ matrix.name }}
+          path: dist/sfyri-${{ steps.version.outputs.version }}-${{ matrix.name }}.tar.gz
           if-no-files-found: error
 
   release:
