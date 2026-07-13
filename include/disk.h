@@ -2,10 +2,13 @@
 #define DISK_H
 
 #include <stddef.h>
+#include <stdbool.h>
 
 typedef struct {
     char name[256];
     char path[1024];
+    char label[256];
+    bool is_internal;
 } Disk;
 
 typedef struct {

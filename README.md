@@ -17,7 +17,7 @@ sfyri writes directly to disks at a low level. If you pick the wrong disk, you c
 
 - **Double-check the device path.** Make sure it's really the USB drive you intend to overwrite, not your hard drive.
 - **Unmount the drive first**, if your operating system requires it.
-- **Expect to need admin/root permissions.** Writing raw data to a disk requires elevated privileges on both macOS and Linux.
+- **Expect to need admin/root permissions.** Writing raw data to a disk requires elevated privileges on macOS, Linux, and Windows.
 - **Never select your system disk.** There is no undo.
 
 When in doubt, stop and double-check rather than proceed.
@@ -27,7 +27,8 @@ When in doubt, stop and double-check rather than proceed.
 - Clean native desktop interface
 - Weighs only 30KB
 - Standalone binary, no installers, no bloat
-- Works on both macOS and Linux
+- Works on macOS, Linux, and Windows
+- Live progress while burning, without freezing the interface
 
 ## What the App Looks Like
 
@@ -49,7 +50,9 @@ cd sfyri-vX.X.X-<platform>-<arch>
 sudo ./sfyri
 ```
 
-Replace `vX.X.X` with the version you downloaded, and `<platform>-<arch>` with your system — e.g. `linux-x86_64`, `linux-arm64`, `darwin-x86_64`, or `darwin-arm64`.
+Replace `vX.X.X` with the version you downloaded, and `<platform>-<arch>` with your system — e.g. `linux-x86_64`, `linux-arm64`, `darwin-x86_64`, `darwin-arm64`, or `windows-x86_64`.
+
+On Windows, the release is a `.zip` containing `sfyri.exe` instead of a `.tar.gz`.
 
 ## Building
 
@@ -82,6 +85,18 @@ lsblk -d -n -o NAME,PATH,TYPE
 
 Heads up: actually burning an image will usually ask for elevated (sudo/root) permissions, since writing to a raw disk device requires it.
 
+### On Windows
+
+Build with [MSYS2](https://www.msys2.org/), using the UCRT64 environment. From an MSYS2 UCRT64 shell:
+
+```sh
+pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-raylib make
+```
+
+sfyri lists your disks using PowerShell (`Get-CimInstance Win32_DiskDrive`), and writes to disks by their `\\.\PhysicalDriveN` path.
+
+Heads up: burning an image requires running the app as Administrator, and the target disk must not have any of its partitions open in Explorer or another program.
+
 ### Compiling
 
 Build it:
@@ -90,7 +105,7 @@ Build it:
 make
 ```
 
-This creates the app at `bin/sfyri`.
+This creates the app at `bin/sfyri` (`bin/sfyri.exe` on Windows).
 
 Other useful commands:
 
@@ -105,7 +120,7 @@ make clean     # remove build files
 ./bin/sfyri
 ```
 
-If you get a permissions error when trying to burn an image, try running the app with elevated privileges (e.g. `sudo ./bin/sfyri` on Linux/macOS).
+If you get a permissions error when trying to burn an image, try running the app with elevated privileges (e.g. `sudo ./bin/sfyri` on Linux/macOS, or "Run as administrator" on Windows).
 
 ## Project Structure
 
@@ -131,8 +146,8 @@ If you're looking through the code, here's how it's organized:
 **What each file does:**
 
 - `src/ui.c` — the interface itself: theme switching, the file picker, disk selector, and the burn confirmation flow.
-- `src/disk.c` — figures out what disks are connected, per platform (macOS vs. Linux).
-- `src/img.c` — checks the image file's size and handles writing it to the disk.
+- `src/disk.c` — figures out what disks are connected, per platform (macOS, Linux, or Windows).
+- `src/img.c` — checks the image file's size and burns it to disk on a background thread, per platform (POSIX vs. Windows raw I/O).
 - The `Makefile` links against raylib installed on your system, and treats the bundled raygui headers as external headers.
 
 ## Links

@@ -36,6 +36,11 @@ jobs:
             os: darwin
             arch: arm64
 
+          - name: windows-x86_64
+            runner: windows-latest
+            os: windows
+            arch: x86_64
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -66,16 +71,37 @@ jobs:
         if: matrix.os == 'darwin'
         run: brew install raylib
 
+      # ---- Windows: MSYS2's UCRT64 environment ships a prebuilt raylib ----
+      # ---- and a GCC toolchain, matching what the Makefile expects.    ----
+      - name: Set up MSYS2 (Windows)
+        if: matrix.os == 'windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-raylib
+            make
+
+      - name: Build (Windows)
+        if: matrix.os == 'windows'
+        shell: msys2 {0}
+        run: make
+
       - name: Build
+        if: matrix.os != 'windows'
         run: make
 
       - name: Verify architecture
+        if: matrix.os != 'windows'
         run: file bin/sfyri
 
       # Uses the tag (e.g. "v1.2.0") when building from a tag push,
       # otherwise falls back to "dev-<short-sha>" for regular commits/PRs.
       - name: Determine version
         id: version
+        shell: bash
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             echo "version=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
@@ -84,16 +110,27 @@ jobs:
           fi
 
       - name: Package
+        if: matrix.os != 'windows'
         run: |
           mkdir -p dist
           cp bin/sfyri dist/sfyri
           tar -czf "dist/sfyri-${{ steps.version.outputs.version }}-${{ matrix.name }}.tar.gz" -C dist sfyri
 
+      - name: Package (Windows)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item bin/sfyri.exe dist/sfyri.exe
+          Compress-Archive -Path dist/sfyri.exe -DestinationPath "dist/sfyri-${{ steps.version.outputs.version }}-${{ matrix.name }}.zip"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: sfyri-${{ steps.version.outputs.version }}-${{ matrix.name }}
-          path: dist/sfyri-${{ steps.version.outputs.version }}-${{ matrix.name }}.tar.gz
+          path: |
+            dist/sfyri-${{ steps.version.outputs.version }}-${{ matrix.name }}.tar.gz
+            dist/sfyri-${{ steps.version.outputs.version }}-${{ matrix.name }}.zip
           if-no-files-found: error
 
   release:
@@ -112,4 +149,6 @@ jobs:
       - name: Create/update release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/**/*.tar.gz
+          files: |
+            artifacts/**/*.tar.gz
+            artifacts/**/*.zip
